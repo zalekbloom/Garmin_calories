@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../services/health_service.dart';
+import '../services/activity_classifier.dart';
 import '../models/activity_summary.dart';
+import '../widgets/activity_card.dart';
+import 'package:health/health.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -32,29 +35,34 @@ class _HomePageState extends State<HomePage> {
     final end = start.add(const Duration(days: 1));
 
     final granted = await _service.requestPermissions();
-
     if (!granted) {
       setState(() => loading = false);
       return;
     }
 
     final data = await _service.fetchWorkouts(start, end);
-    _service.cleanDuplicates(data);
 
     final result = ActivitySummary();
 
     for (var item in data) {
-      final type = item.typeString.toLowerCase();
-      final calories = (item.value ?? 0).toDouble();
+      if (item is! HealthWorkoutDataPoint) continue;
 
-      if (type.contains("hiking")) {
-        result.hikingCount++;
-        result.hikingCalories += calories;
-      }
+      final activity = ActivityClassifier.classify(item.workoutActivityType);
+      final calories = (item.totalEnergyBurned ?? 0).toDouble();
 
-      if (type.contains("swimming")) {
-        result.swimmingCount++;
-        result.swimmingCalories += calories;
+      switch (activity) {
+        case ActivityKind.hiking:
+          result.hikingCount++;
+          result.hikingCalories += calories;
+          break;
+
+        case ActivityKind.swimming:
+          result.swimmingCount++;
+          result.swimmingCalories += calories;
+          break;
+
+        case ActivityKind.other:
+          break;
       }
     }
 
@@ -86,7 +94,6 @@ class _HomePageState extends State<HomePage> {
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
@@ -113,15 +120,25 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 20),
 
-            if (summary != null) ...[
-              Text("Hiking: ${summary!.hikingCount} activities"),
-              Text("Hiking calories: ${summary!.hikingCalories}"),
-              const SizedBox(height: 10),
-              Text("Swimming: ${summary!.swimmingCount} activities"),
-              Text("Swimming calories: ${summary!.swimmingCalories}"),
-              const SizedBox(height: 10),
-              Text("Total: ${summary!.totalCalories}"),
-            ],
+            if (summary != null)
+              Expanded(
+                child: ListView(
+                  children: [
+                    ActivityCard(
+                      title: "Hiking",
+                      icon: Icons.terrain,
+                      count: summary!.hikingCount,
+                      calories: summary!.hikingCalories,
+                    ),
+                    ActivityCard(
+                      title: "Swimming",
+                      icon: Icons.pool,
+                      count: summary!.swimmingCount,
+                      calories: summary!.swimmingCalories,
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
