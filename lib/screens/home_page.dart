@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../services/health_service.dart';
+import '../models/activity_summary.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -8,10 +10,58 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  DateTime selectedDate = DateTime.now();
+  final HealthService _service = HealthService();
 
-  String formatDate(DateTime d) {
-    return "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+  DateTime selectedDate = DateTime.now();
+  bool loading = false;
+
+  ActivitySummary? summary;
+
+  Future<void> generateReport() async {
+    setState(() {
+      loading = true;
+      summary = null;
+    });
+
+    final start = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+    );
+
+    final end = start.add(const Duration(days: 1));
+
+    final granted = await _service.requestPermissions();
+
+    if (!granted) {
+      setState(() => loading = false);
+      return;
+    }
+
+    final data = await _service.fetchWorkouts(start, end);
+    _service.cleanDuplicates(data);
+
+    final result = ActivitySummary();
+
+    for (var item in data) {
+      final type = item.typeString.toLowerCase();
+      final calories = (item.value ?? 0).toDouble();
+
+      if (type.contains("hiking")) {
+        result.hikingCount++;
+        result.hikingCalories += calories;
+      }
+
+      if (type.contains("swimming")) {
+        result.swimmingCount++;
+        result.swimmingCalories += calories;
+      }
+    }
+
+    setState(() {
+      summary = result;
+      loading = false;
+    });
   }
 
   void pickDate() async {
@@ -29,12 +79,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void generateReport() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Report generation coming next step")),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -44,20 +88,10 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Select Date",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 8),
-
             Row(
               children: [
-                Text(
-                  formatDate(selectedDate),
-                  style: const TextStyle(fontSize: 16),
-                ),
-                const SizedBox(width: 12),
+                Text("${selectedDate.toLocal()}".split(' ')[0]),
+                const SizedBox(width: 10),
                 ElevatedButton(
                   onPressed: pickDate,
                   child: const Text("Pick Date"),
@@ -65,22 +99,29 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
 
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: generateReport,
-                child: const Text("Generate Report"),
+                onPressed: loading ? null : generateReport,
+                child: loading
+                    ? const CircularProgressIndicator()
+                    : const Text("Generate Report"),
               ),
             ),
 
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
 
-            const Text(
-              "Report will appear here...",
-              style: TextStyle(color: Colors.grey),
-            ),
+            if (summary != null) ...[
+              Text("Hiking: ${summary!.hikingCount} activities"),
+              Text("Hiking calories: ${summary!.hikingCalories}"),
+              const SizedBox(height: 10),
+              Text("Swimming: ${summary!.swimmingCount} activities"),
+              Text("Swimming calories: ${summary!.swimmingCalories}"),
+              const SizedBox(height: 10),
+              Text("Total: ${summary!.totalCalories}"),
+            ],
           ],
         ),
       ),

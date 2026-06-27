@@ -1,13 +1,13 @@
 class ActivitySummary {
-  int hikingActivities;
-  int swimmingActivities;
+  int hikingCount;
+  int swimmingCount;
 
   double hikingCalories;
   double swimmingCalories;
 
   ActivitySummary({
-    this.hikingActivities = 0,
-    this.swimmingActivities = 0,
+    this.hikingCount = 0,
+    this.swimmingCount = 0,
     this.hikingCalories = 0,
     this.swimmingCalories = 0,
   });
